@@ -76,23 +76,16 @@ public class DialogueManager : MonoBehaviour
         LastSelectedOptionText = selectedText;
         Debug.Log($"玩家选择了选项 ID: {id}，记录的文本是: {LastSelectedOptionText}");
 
-        // 【修改点 3】：实现你的任务“弹出功能，用if else实现”
         if (id == 1)
         {
-            // 在这里写选项1的逻辑，比如贺采的后续反应
-            Debug.Log("执行选项1的功能：处理贺采的逻辑");
+            // 玩家选了：“发生了什么？”
+            ShowDialogue("神秘人", "哼，睡醒了吗？你的力量暴走差点毁了整个实验室。");
         }
         else if (id == 2)
         {
-            // 在这里写选项2的逻辑
-            Debug.Log("执行选项2的功能：处理其他逻辑");
+            // 玩家选了：“你竟敢暗算我！”
+            ShowDialogue("神秘人", "暗算？如果不是我及时把你关起来，你现在连跟我叫嚣的力气都没有了。");
         }
-        else
-        {
-            // 兜底逻辑
-            Debug.Log("执行默认功能");
-        }
-
         // 选择后关闭面板
         OptionPanel.SetActive(false);
     }

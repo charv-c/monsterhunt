@@ -23,12 +23,17 @@ public class Player : MonoBehaviour
     private Vector3 currentMoveDirection;
     private Rigidbody rb;
     private bool jumpRequested;
-
+    private StaminaController _stamina;
+    private HealthController _health;
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
-
+        if (animator == null)
+            animator = GetComponent<Animator>();
+        // 新增：获取耐力控制器组件
+        _health = GetComponent<HealthController>(); // 新增：获取血量组件
+        _stamina = GetComponent<StaminaController>();
         if (freeLookCamera == null)
         {
 #if UNITY_2023_1_OR_NEWER
@@ -54,8 +59,12 @@ public class Player : MonoBehaviour
         if (Input.GetButtonDown("Jump"))
             jumpRequested = true;
     }
-
-    void FixedUpdate()
+    // 新增：测试代码，按 K 键扣 30 点血
+        if (Input.GetKeyDown(KeyCode.K))
+        {
+            if (_health != null) _health.TakeDamage(30f);
+        }
+void FixedUpdate()
     {
         // 处理移动（基于玩家自身朝向）
         Vector3 horizontalVelocity = HandleMovement();
@@ -67,7 +76,11 @@ public class Player : MonoBehaviour
         // 跳跃：施加瞬时力
         if (jumpRequested && IsGrounded())
         {
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            // 只有在 StaminaController 允许消耗时才执行跳跃
+            if (_stamina != null && _stamina.TryConsume(_stamina.JumpCost))
+            {
+                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            }
             jumpRequested = false;
         }
 
@@ -90,16 +103,24 @@ public class Player : MonoBehaviour
 
         Vector3 moveDirection = (forward * vertical + right * horizontal).normalized;
 
-        bool isSprinting = Input.GetKey(KeyCode.LeftShift);
-        float currentSpeed = moveSpeed * (isSprinting ? sprintMultiplier : 1f);
+        // 判断逻辑：按下 Shift 且耐力大于 0
+        bool canSprint = Input.GetKey(KeyCode.LeftShift) && _stamina != null && _stamina.CurrentStamina > 0;
+        float currentSpeed = moveSpeed * (canSprint ? sprintMultiplier : 1f);
 
         if (moveDirection.sqrMagnitude > 0.01f)
         {
+            // 如果正在冲刺，持续扣除耐力
+            if (canSprint)
+            {
+                _stamina.ConsumeContinuous(_stamina.SprintCost);
+            }
+
             currentMoveDirection = moveDirection;
             return moveDirection * currentSpeed;
         }
         else
         {
+            // 路径 2：必须处理没有移动输入的情况
             currentMoveDirection = Vector3.zero;
             return Vector3.zero;
         }
