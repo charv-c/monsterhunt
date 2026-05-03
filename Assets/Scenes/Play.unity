@@ -1157,34 +1157,11 @@ Transform:
   m_Father: {fileID: 41581824}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1591318050 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4320607135262551748, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
-  m_PrefabInstance: {fileID: 8790784825411195242}
-  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1754250194 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6308935550040912147, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
   m_PrefabInstance: {fileID: 8790784825411195242}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1754250196
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1591318050}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1a5af9d8d972d994eaf5996874f44fd9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  moveSpeed: 5
-  sprintMultiplier: 1.8
-  mouseSensitivityX: 4
-  jumpForce: 8
-  freeLookCamera: {fileID: 41581823}
-  animator: {fileID: 0}
 --- !u!1001 &1970076832
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1196,6 +1173,10 @@ PrefabInstance:
       propertyPath: m_Constraints
       value: 80
       objectReference: {fileID: 0}
+    - target: {fileID: -567320297341567753, guid: 8d1902946c29ceb4c8888d75eb3e7640, type: 3}
+      propertyPath: playerTransform
+      value: 
+      objectReference: {fileID: 1754250194}
     - target: {fileID: 240950422328944537, guid: 8d1902946c29ceb4c8888d75eb3e7640, type: 3}
       propertyPath: m_Name
       value: Enemy
@@ -1384,10 +1365,10 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2720726157190994707, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
-      propertyPath: m_Constraints
-      value: 112
-      objectReference: {fileID: 0}
+    - target: {fileID: 1754250196, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
+      propertyPath: freeLookCamera
+      value: 
+      objectReference: {fileID: 41581823}
     - target: {fileID: 4320607135262551748, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
       propertyPath: m_Name
       value: Player
