@@ -21,20 +21,6 @@ public class PlayerGuardState : IState
 
     public void LogicUpdate()
     {
-        // 3. 检测 R 键是否松开
-        // 注意：Input.GetKey 是只要按着就返回 true，取反则表示松开了按键
-        if (!Input.GetKey(KeyCode.R))
-        {
-            // 4. 智能切换：根据是否有位移输入决定回哪个状态
-            if (player.IsMoving())
-            {
-                player.stateMachine.TransitionTo(player.moveState);
-            }
-            else
-            {
-                player.stateMachine.TransitionTo(player.idleState);
-            }
-        }
     }
 
     public void PhysicsUpdate()
@@ -49,5 +35,6 @@ public class PlayerGuardState : IState
         {
             player.animator.SetBool("IsGuarding", false);
         }
+        Debug.Log("<color=cyan>【战斗系统】退出格挡：防御已结束，耐力恢复正常</color>");
     }
 }

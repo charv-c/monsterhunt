@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class BehaviorTree : MonoBehaviour
 {
@@ -74,13 +76,83 @@ public class BehaviorTree : MonoBehaviour
 
     public class ObservePlayer : Node//观察玩家节点
     {
+        private Transform enemyTransform;
+        private Transform playerTransform;
+        private NavMeshAgent agent;
+
+        private float targetDistance = 7f;//敌人观察玩家的距离
+        private float chaseSpeed = 2f;//敌人追逐玩家的速度
+        private float orbitSpeed = 2f;//敌人绕圈速度
+        private float deadZone = 0.5f;       // 防抖动死区范围
+
+        private bool isStart = false;              // 是否开始观察
+        private float orbitDirection = 1f;
+        private float GeneOrbitDirection;        // 顺/逆时针
+
+        private float ObserveTime = 3f;          // 观察时间
+        private float timer = 0f;                // 观察计时器
+
+        public ObservePlayer(Transform enemyTransform, Transform playerTransform, NavMeshAgent agent)
+        {
+            this.enemyTransform = enemyTransform;
+            this.playerTransform = playerTransform;
+            this.agent = agent;
+        }
+
         public override NodeState Evaluate()
         {
-            Debug.Log("观察玩家");
-            return NodeState.SUCCESS; // 返回执行成功
+            if (playerTransform == null)
+            {
+                return NodeState.FAILURE; // 玩家不存在，返回失败
+            }
+
+            if (!isStart)
+            {
+                GeneOrbitDirection = Random.value > 0.5f ? -1f : 1f;
+                Debug.Log(GeneOrbitDirection);
+                isStart = true;//随机选择顺时针或逆时针绕圈
+            }
+
+            timer += Time.deltaTime;//计时
+
+            Vector3 enemyPos = enemyTransform.position;
+            Vector3 playerPos = playerTransform.position;
+
+            Vector3 directionToPlayer = (playerPos - enemyPos).normalized;
+            float distanceToPlayer = Vector3.Distance(enemyPos, playerPos);
+            float error = distanceToPlayer - targetDistance;
+
+            Vector3 radial = Vector3.zero;
+
+            if (Mathf.Abs(error) > deadZone)
+            {
+                radial = directionToPlayer * error * chaseSpeed;
+            }//防止抖动
+
+            orbitDirection = Mathf.Lerp(orbitDirection, GeneOrbitDirection, Time.deltaTime * 2f);
+            Vector3 tangent = Vector3.Cross(Vector3.up, directionToPlayer).normalized * orbitDirection;
+            Vector3 orbit = tangent * orbitSpeed;//实现绕圈
+
+            Vector3 moveDirection = radial + orbit;
+            Vector3 targetPos = enemyPos + moveDirection;
+            agent.SetDestination(targetPos);
+
+            Vector3 lookDirection = (playerPos - enemyPos).normalized;
+            if (lookDirection != Vector3.zero)
+            {
+                Quaternion rot = Quaternion.LookRotation(lookDirection);
+                enemyTransform.rotation = Quaternion.Slerp(enemyTransform.rotation, rot, Time.deltaTime * 5f);
+            }
+            if (timer >= ObserveTime)
+            {
+                timer = 0f; // 重置计时器
+                isStart = false; // 重置观察状态
+                return NodeState.SUCCESS; // 观察完成，返回成功
+            }
+
+            return NodeState.RUNNING;
         }
     }
-
     public class MeleeAttackPlayer : Node//近战攻击玩家节点
     {
         public override NodeState Evaluate()
@@ -90,12 +162,50 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class RangedAttackPlayer : Node//远程攻击玩家节点
+    public class RangedAttackPlayer : Node//远程攻击玩家节点（委托给 EnemyRangedAttack 组件执行）
     {
+        private EnemyRangedAttack rangedAttackComponent;
+        private bool hasFired = false;
+
+        /// <summary>
+        /// 构造：传入敌人的 EnemyRangedAttack 组件（在 Enemy 游戏对象上）
+        /// </summary>
+        public RangedAttackPlayer(EnemyRangedAttack rangedAttackComponent)
+        {
+            this.rangedAttackComponent = rangedAttackComponent;
+        }
+
         public override NodeState Evaluate()
         {
-            Debug.Log("远程攻击玩家");
-            return NodeState.SUCCESS;// 返回执行成功
+            if (rangedAttackComponent == null)
+            {
+                Debug.LogWarning("RangedAttackPlayer: rangedAttackComponent is null");
+                return NodeState.FAILURE;
+            }
+
+            if (!hasFired)
+            {
+                bool fired = rangedAttackComponent.TryFire();
+                if (fired)
+                {
+                    hasFired = true;
+                    return NodeState.SUCCESS;
+                }
+                else
+                {
+                    // TryFire 失败可能是因为 prefab 未设置或已发射过
+                    return NodeState.FAILURE;
+                }
+            }
+
+            return NodeState.SUCCESS;
+        }
+
+        public void ResetFired()
+        {
+            hasFired = false;
+            if (rangedAttackComponent != null)
+                rangedAttackComponent.ResetFire();
         }
     }
 

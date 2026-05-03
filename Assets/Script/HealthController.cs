@@ -16,6 +16,10 @@ public class HealthController : MonoBehaviour
 
     private float _delayTimer;
 
+    // 新增：无敌状态（用于冲刺期间短暂免伤）
+    private bool _isInvincible;
+    public bool IsInvincible => _isInvincible;
+
     void Start()
     {
         CurrentHealth = MaxHealth;
@@ -46,8 +50,20 @@ public class HealthController : MonoBehaviour
         RedHealth -= recoverThisFrame;
     }
 
+    /// <summary>
+    /// 设置/取消无敌（供 Player 在冲刺开始/结束时调用）
+    /// </summary>
+    /// <param name="invincible">是否进入无敌</param>
+    public void SetInvincible(bool invincible)
+    {
+        _isInvincible = invincible;
+    }
+
     public void TakeDamage(float totalDamage)
     {
+        // 如果处于无敌状态，不受伤
+        if (_isInvincible) return;
+
         // 1. 核心机制：再次受伤，之前的红血直接清零
         RedHealth = 0f;
 
@@ -63,12 +79,12 @@ public class HealthController : MonoBehaviour
         // 5. 重置回复延迟
         _delayTimer = RecoveryDelay;
 
-        // 6. 死亡保护
-        CurrentHealth = Mathf.Clamp(CurrentHealth, 0, MaxHealth);
+  
     }
     public void ResetHealth()
     {
-            CurrentHealth = MaxHealth;
-            RedHealth = 0f;
+        CurrentHealth = MaxHealth;
+        RedHealth = 0f;
+        SetInvincible(false); // 【加这行】防止死在闪避帧里导致永久无敌
     }
 }
