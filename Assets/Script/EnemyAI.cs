@@ -15,16 +15,15 @@ public class EnemyAI : MonoBehaviour
         agent = GetComponent<NavMeshAgent>();
         root = new BehaviorTree.Selector(new List<BehaviorTree.Node>
         {
-            new BehaviorTree.Sequence(new List<BehaviorTree.Node>
+            new BehaviorTree.Selector(new List<BehaviorTree.Node>
             {
-                new BehaviorTree.ObservePlayer(transform, playerTransform, agent),
+                new BehaviorTree.ChasePlayer(transform, playerTransform, agent, 7f),
+                new BehaviorTree.RetreatPlayer(transform, playerTransform, agent, 3f)
             }),
             new BehaviorTree.Sequence(new List<BehaviorTree.Node>
             {
-                new BehaviorTree.ObservePlayer(transform, playerTransform, agent),
                 new BehaviorTree.RangedAttackPlayer()
-            }),
-            new BehaviorTree.SetTrap()
+            })
         });
         
     }

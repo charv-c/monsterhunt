@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -6,19 +6,19 @@ using UnityEngine.AI;
 
 public class BehaviorTree : MonoBehaviour
 {
-    public enum NodeState//½Úµã×´Ì¬
+    public enum NodeState//èŠ‚ç‚¹çŠ¶æ€
     {
         RUNNING,
         SUCCESS,
         FAILURE
     }
 
-    public abstract class Node//³éÏó½ÚµãÀà
+    public abstract class Node//æŠ½è±¡èŠ‚ç‚¹ç±»
     {
         public abstract NodeState Evaluate();
     }
 
-    public class Selector : Node//Ñ¡Ôñ½Úµã
+    public class Selector : Node//é€‰æ‹©èŠ‚ç‚¹
     {
         private List<Node> nodes = new List<Node>();
         public Selector(List<Node> nodes)
@@ -45,7 +45,7 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class Sequence : Node//ĞòÁĞ½Úµã
+    public class Sequence : Node//åºåˆ—èŠ‚ç‚¹
     {
         private List<Node> nodes = new List<Node>();
         public Sequence(List<Node> nodes)
@@ -74,109 +74,180 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class ObservePlayer : Node//¹Û²ìÍæ¼Ò½Úµã
+    /* public class ObservePlayer : Node//è§‚å¯Ÿç©å®¶èŠ‚ç‚¹
+     {
+         private Transform enemyTransform;
+         private Transform playerTransform;
+         private NavMeshAgent agent;
+
+         private float targetDistance = 7f;//æ•Œäººè§‚å¯Ÿç©å®¶çš„è·ç¦»
+         private float chaseSpeed = 2f;//æ•Œäººè¿½é€ç©å®¶çš„é€Ÿåº¦
+         private float orbitSpeed = 2f;//æ•Œäººç»•åœˆé€Ÿåº¦
+         private float deadZone = 0.5f;       // é˜²æŠ–åŠ¨æ­»åŒºèŒƒå›´
+
+         private bool isStart = false;              // æ˜¯å¦å¼€å§‹è§‚å¯Ÿ
+         private float orbitDirection = 1f;
+         private float GeneOrbitDirection;        // é¡º/é€†æ—¶é’ˆ
+
+         private float ObserveTime = 3f;          // è§‚å¯Ÿæ—¶é—´
+         private float timer = 0f;                // è§‚å¯Ÿè®¡æ—¶å™¨
+
+         public ObservePlayer(Transform enemyTransform, Transform playerTransform, NavMeshAgent agent)
+         {
+             this.enemyTransform = enemyTransform;
+             this.playerTransform = playerTransform;
+             this.agent = agent;
+         }
+
+         public override NodeState Evaluate()
+         {
+             if (playerTransform == null)
+             {
+                 return NodeState.FAILURE; // ç©å®¶ä¸å­˜åœ¨ï¼Œè¿”å›å¤±è´¥
+             }
+
+             if (!isStart)
+             {
+                 GeneOrbitDirection = Random.value > 0.5f ? -1f : 1f;
+                 Debug.Log(GeneOrbitDirection);
+                 isStart = true;//éšæœºé€‰æ‹©é¡ºæ—¶é’ˆæˆ–é€†æ—¶é’ˆç»•åœˆ
+             }
+
+             timer += Time.deltaTime;//è®¡æ—¶
+
+             Vector3 enemyPos = enemyTransform.position;
+             Vector3 playerPos = playerTransform.position;
+
+             Vector3 directionToPlayer = (playerPos - enemyPos).normalized;
+             float distanceToPlayer = Vector3.Distance(enemyPos, playerPos);
+             float error = distanceToPlayer - targetDistance;
+
+             Vector3 radial = Vector3.zero;
+
+             if (Mathf.Abs(error) > deadZone)
+             {
+                 radial = directionToPlayer * error * chaseSpeed;
+             }//é˜²æ­¢æŠ–åŠ¨
+
+             orbitDirection = Mathf.Lerp(orbitDirection, GeneOrbitDirection, Time.deltaTime * 2f);
+             Vector3 tangent = Vector3.Cross(Vector3.up, directionToPlayer).normalized * orbitDirection;
+             Vector3 orbit = tangent * orbitSpeed;//å®ç°ç»•åœˆ
+
+             Vector3 moveDirection = radial + orbit;
+             Vector3 targetPos = enemyPos + moveDirection;
+             agent.SetDestination(targetPos);
+
+             Vector3 lookDirection = (playerPos - enemyPos).normalized;
+             if (lookDirection != Vector3.zero)
+             {
+                 Quaternion rot = Quaternion.LookRotation(lookDirection);
+                 enemyTransform.rotation = Quaternion.Slerp(enemyTransform.rotation, rot, Time.deltaTime * 5f);
+             }
+             if (timer >= ObserveTime)
+             {
+                 timer = 0f; // é‡ç½®è®¡æ—¶å™¨
+                 isStart = false; // é‡ç½®è§‚å¯ŸçŠ¶æ€
+                 return NodeState.SUCCESS; // è§‚å¯Ÿå®Œæˆï¼Œè¿”å›æˆåŠŸ
+             }
+
+             return NodeState.RUNNING;
+         }
+     }*/
+
+    public class ChasePlayer : Node
     {
-        private Transform enemyTransform;
-        private Transform playerTransform;
+        private Transform enemy;
+        private Transform player;
         private NavMeshAgent agent;
 
-        private float targetDistance = 7f;//µĞÈË¹Û²ìÍæ¼ÒµÄ¾àÀë
-        private float chaseSpeed = 2f;//µĞÈË×·ÖğÍæ¼ÒµÄËÙ¶È
-        private float orbitSpeed = 2f;//µĞÈËÈÆÈ¦ËÙ¶È
-        private float deadZone = 0.5f;       // ·À¶¶¶¯ËÀÇø·¶Î§
+        private float chaseDistance;
 
-        private bool isStart = false;              // ÊÇ·ñ¿ªÊ¼¹Û²ì
-        private float orbitDirection = 1f;
-        private float GeneOrbitDirection;        // Ë³/ÄæÊ±Õë
-
-        private float ObserveTime = 3f;          // ¹Û²ìÊ±¼ä
-        private float timer = 0f;                // ¹Û²ì¼ÆÊ±Æ÷
-
-        public ObservePlayer(Transform enemyTransform, Transform playerTransform, NavMeshAgent agent)
+        public ChasePlayer(Transform enemy, Transform player, NavMeshAgent agent, float chaseDistance)
         {
-            this.enemyTransform = enemyTransform;
-            this.playerTransform = playerTransform;
+            this.enemy = enemy;
+            this.player = player;
             this.agent = agent;
+            this.chaseDistance = chaseDistance;
         }
 
         public override NodeState Evaluate()
         {
-            if (playerTransform == null)
+            float distance = Vector3.Distance(enemy.position, player.position);
+
+            if (distance > chaseDistance)
             {
-                return NodeState.FAILURE; // Íæ¼Ò²»´æÔÚ£¬·µ»ØÊ§°Ü
+                Vector3 dir = (player.position - enemy.position).normalized;
+                Vector3 targetPos = enemy.position + dir * 3f;
+                targetPos.y = enemy.position.y; // ä¿æŒæ•Œäººé«˜åº¦ä¸å˜
+
+                Debug.Log("è¿½é€ç©å®¶");
+                agent.SetDestination(targetPos);
+                return NodeState.RUNNING;
             }
 
-            if (!isStart)
-            {
-                GeneOrbitDirection = Random.value > 0.5f ? -1f : 1f;
-                Debug.Log(GeneOrbitDirection);
-                isStart = true;//Ëæ»úÑ¡ÔñË³Ê±Õë»òÄæÊ±ÕëÈÆÈ¦
-            }
-
-            timer += Time.deltaTime;//¼ÆÊ±
-
-            Vector3 enemyPos = enemyTransform.position;
-            Vector3 playerPos = playerTransform.position;
-
-            Vector3 directionToPlayer = (playerPos - enemyPos).normalized;
-            float distanceToPlayer = Vector3.Distance(enemyPos, playerPos);
-            float error = distanceToPlayer - targetDistance;
-
-            Vector3 radial = Vector3.zero;
-
-            if (Mathf.Abs(error) > deadZone)
-            {
-                radial = directionToPlayer * error * chaseSpeed;
-            }//·ÀÖ¹¶¶¶¯
-
-            orbitDirection = Mathf.Lerp(orbitDirection, GeneOrbitDirection, Time.deltaTime * 2f);
-            Vector3 tangent = Vector3.Cross(Vector3.up, directionToPlayer).normalized * orbitDirection;
-            Vector3 orbit = tangent * orbitSpeed;//ÊµÏÖÈÆÈ¦
-
-            Vector3 moveDirection = radial + orbit;
-            Vector3 targetPos = enemyPos + moveDirection;
-            agent.SetDestination(targetPos);
-
-            Vector3 lookDirection = (playerPos - enemyPos).normalized;
-            if (lookDirection != Vector3.zero)
-            {
-                Quaternion rot = Quaternion.LookRotation(lookDirection);
-                enemyTransform.rotation = Quaternion.Slerp(enemyTransform.rotation, rot, Time.deltaTime * 5f);
-            }
-            if (timer >= ObserveTime)
-            {
-                timer = 0f; // ÖØÖÃ¼ÆÊ±Æ÷
-                isStart = false; // ÖØÖÃ¹Û²ì×´Ì¬
-                return NodeState.SUCCESS; // ¹Û²ìÍê³É£¬·µ»Ø³É¹¦
-            }
-
-            return NodeState.RUNNING;
-        }
-    }
-    public class MeleeAttackPlayer : Node//½üÕ½¹¥»÷Íæ¼Ò½Úµã
-    {
-        public override NodeState Evaluate()
-        {
-            Debug.Log("½üÕ½¹¥»÷Íæ¼Ò");
-            return NodeState.SUCCESS;// ·µ»ØÖ´ĞĞ³É¹¦
+            return NodeState.FAILURE; // â­ ä¸ç»§ç»­å‰è¿›
         }
     }
 
-    public class RangedAttackPlayer : Node//Ô¶³Ì¹¥»÷Íæ¼Ò½Úµã
+    public class RetreatPlayer : Node
     {
+        private Transform enemy;
+        private Transform player;
+        private NavMeshAgent agent;
+
+        private float retreatDistance;
+
+        public RetreatPlayer(Transform enemy, Transform player, NavMeshAgent agent, float retreatDistance)
+        {
+            this.enemy = enemy;
+            this.player = player;
+            this.agent = agent;
+            this.retreatDistance = retreatDistance;
+        }
+
         public override NodeState Evaluate()
         {
-            Debug.Log("Ô¶³Ì¹¥»÷Íæ¼Ò");
-            return NodeState.SUCCESS;// ·µ»ØÖ´ĞĞ³É¹¦
+            float distance = Vector3.Distance(enemy.position, player.position);
+
+            if (distance < retreatDistance)
+            {
+                Vector3 dir = (enemy.position - player.position).normalized;
+                Vector3 targetPos = enemy.position + dir * 3f;
+                targetPos.y = enemy.position.y; // ä¿æŒæ•Œäººé«˜åº¦ä¸å˜
+
+                Debug.Log("æ’¤é€€ç©å®¶");
+                agent.SetDestination(targetPos);
+                return NodeState.RUNNING;
+            }
+
+            return NodeState.FAILURE;
         }
     }
 
-    public class SetTrap : Node//ÉèÖÃÏİÚå½Úµã
+    public class MeleeAttackPlayer : Node//è¿‘æˆ˜æ”»å‡»ç©å®¶èŠ‚ç‚¹
     {
         public override NodeState Evaluate()
         {
-            Debug.Log("ÉèÖÃÏİÚå");
-            return NodeState.SUCCESS;// ·µ»ØÖ´ĞĞ³É¹¦
+            Debug.Log("è¿‘æˆ˜æ”»å‡»ç©å®¶");
+            return NodeState.SUCCESS;// è¿”å›æ‰§è¡ŒæˆåŠŸ
+        }
+    }
+
+    public class RangedAttackPlayer : Node//è¿œç¨‹æ”»å‡»ç©å®¶èŠ‚ç‚¹
+    {
+        public override NodeState Evaluate()
+        {
+            Debug.Log("è¿œç¨‹æ”»å‡»ç©å®¶");
+            return NodeState.FAILURE;// è¿”å›æ‰§è¡ŒæˆåŠŸ
+        }
+    }
+
+    public class SetTrap : Node//è®¾ç½®é™·é˜±èŠ‚ç‚¹
+    {
+        public override NodeState Evaluate()
+        {
+            Debug.Log("è®¾ç½®é™·é˜±");
+            return NodeState.SUCCESS;// è¿”å›æ‰§è¡ŒæˆåŠŸ
         }
     }
 
