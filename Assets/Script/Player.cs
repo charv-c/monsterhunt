@@ -1,5 +1,6 @@
 using UnityEngine;
 using Cinemachine;
+using System.Collections;
 
 public class Player : MonoBehaviour
 {
@@ -20,22 +21,41 @@ public class Player : MonoBehaviour
     [Header("动画")]
     public Animator animator;
     public Rigidbody rb;
+
+    [Header("冲刺设置")]
+    public float dashDistance = 6f;
+    public float dashDuration = 0.2f;
+    public float dashCost = 30f;
+
+    // --- 内部状态 ---
     private Vector3 currentMoveDirection;
+    private bool jumpRequested;
     private StaminaController _stamina;
     private HealthController _health;
 
-    // 状态机相关
+    // 冲刺状态（供状态机使用）
+    [HideInInspector] public bool isDashing;
+    [HideInInspector] public Vector3 dashDirection;
+    [HideInInspector] public float dashSpeed;
+
+    // --- 状态机 ---
     public PlayerStateMachine stateMachine;
     public PlayerIdleState idleState;
     public PlayerMoveState moveState;
-    public PlayerLightAttackState lightAttackState; // 改为轻功
-    public PlayerHeavyAttackState heavyAttackState; // 改为重功
+    public PlayerLightAttackState lightAttackState;
+    public PlayerHeavyAttackState heavyAttackState;
     public PlayerGuardState guardState;
+    public PlayerDashState dashState;
+    public PlayerJumpState jumpState;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true;
+
+        if (animator == null)
+            animator = GetComponent<Animator>();
+
         _health = GetComponent<HealthController>();
         _stamina = GetComponent<StaminaController>();
 
@@ -46,9 +66,12 @@ public class Player : MonoBehaviour
         lightAttackState = new PlayerLightAttackState(this);
         heavyAttackState = new PlayerHeavyAttackState(this);
         guardState = new PlayerGuardState(this);
+        dashState = new PlayerDashState(this);
+        jumpState = new PlayerJumpState(this);
 
         stateMachine.Initialize(idleState);
 
+        // 自动查找摄像机
         if (freeLookCamera == null)
         {
 #if UNITY_2023_1_OR_NEWER
@@ -61,89 +84,173 @@ public class Player : MonoBehaviour
 
     void Update()
     {
-        // 1. 攻击输入检测 (高优先级)
-        if (Input.GetMouseButtonDown(0)) // 左键：轻攻击
+        // 1. 输入检测（优先级：攻击 > 格挡 > 冲刺 > 跳跃）
+        if (Input.GetMouseButtonDown(0))
         {
             stateMachine.TransitionTo(lightAttackState);
         }
-        else if (Input.GetMouseButtonDown(1)) // 右键：重攻击
+        else if (Input.GetMouseButtonDown(1))
         {
             stateMachine.TransitionTo(heavyAttackState);
         }
-        // 格挡
-        else if (Input.GetKeyDown(KeyCode.R)) 
+        else if (Input.GetKeyDown(KeyCode.R))
         {
             stateMachine.TransitionTo(guardState);
         }
+        else if (Input.GetKeyDown(KeyCode.LeftShift) && !isDashing)
+        {
+            // 只有在非冲刺状态下才允许触发冲刺
+            if (TryStartDash())
+                stateMachine.TransitionTo(dashState);
+        }
+        else if (Input.GetButtonDown("Jump") && IsGrounded())
+        {
+            jumpRequested = true;
+            stateMachine.TransitionTo(jumpState);
+        }
 
-// 2. 状态机逻辑执行
+        // 2. 鼠标控制旋转（全局可用，不受状态限制）
+        HandleRotation();
+
+        // 3. 状态机逻辑更新
         stateMachine.CurrentState.LogicUpdate();
 
-// 3. 测试代码：按 K 键扣血
-if (Input.GetKeyDown(KeyCode.K))
-{
-    if (_health != null) _health.TakeDamage(30f);
-}
-}
+        // 4. 测试代码：按 K 键扣血
+        if (Input.GetKeyDown(KeyCode.K))
+        {
+            if (_health != null) _health.TakeDamage(30f);
+        }
+    }
 
-void FixedUpdate()
-{
-if (stateMachine.CurrentState != null)
-    stateMachine.CurrentState.PhysicsUpdate();
-}
+    void FixedUpdate()
+    {
+        if (stateMachine.CurrentState != null)
+            stateMachine.CurrentState.PhysicsUpdate();
+    }
 
-// --- 以下是供状态类调用的公共工具方法 ---
+    // --- 旋转控制 ---
+    public void HandleRotation()
+    {
+        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivityX;
+        if (Mathf.Abs(mouseX) > 0.001f)
+        {
+            transform.Rotate(0f, mouseX, 0f);
+        }
+    }
 
-public Vector3 HandleMovement()
-{
-float horizontal = Input.GetAxisRaw("Horizontal");
-float vertical = Input.GetAxisRaw("Vertical");
+    // --- 移动处理（供状态机调用）---
+    public Vector3 HandleMovement()
+    {
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
 
-Vector3 forward = transform.forward;
-forward.y = 0f;
-forward.Normalize();
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        forward.Normalize();
 
-Vector3 right = transform.right;
-right.y = 0f;
-right.Normalize();
+        Vector3 right = transform.right;
+        right.y = 0f;
+        right.Normalize();
 
-Vector3 moveDirection = (forward * vertical + right * horizontal).normalized;
+        Vector3 moveDirection = (forward * vertical + right * horizontal).normalized;
 
-bool canSprint = Input.GetKey(KeyCode.LeftShift) && _stamina != null && _stamina.CurrentStamina > 0;
-float currentSpeed = moveSpeed * (canSprint ? sprintMultiplier : 1f);
+        bool canSprint = Input.GetKey(KeyCode.LeftShift) && _stamina != null && _stamina.CurrentStamina > 0;
+        float currentSpeed = moveSpeed * (canSprint ? sprintMultiplier : 1f);
 
-if (moveDirection.sqrMagnitude > 0.01f)
-{
-    if (canSprint) _stamina.ConsumeContinuous(_stamina.SprintCost);
-    currentMoveDirection = moveDirection;
-    return moveDirection * currentSpeed;
-}
-else
-{
-    currentMoveDirection = Vector3.zero;
-    return Vector3.zero;
-}
-}
+        if (moveDirection.sqrMagnitude > 0.01f)
+        {
+            if (canSprint) _stamina.ConsumeContinuous(_stamina.SprintCost);
+            currentMoveDirection = moveDirection;
+            return moveDirection * currentSpeed;
+        }
+        else
+        {
+            currentMoveDirection = Vector3.zero;
+            return Vector3.zero;
+        }
+    }
 
-public void UpdateAnimator()
-{
-if (animator == null) return;
+    // --- 跳跃逻辑 ---
+    public void HandleJump()
+    {
+        if (jumpRequested && IsGrounded())
+        {
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            jumpRequested = false;
+        }
+    }
 
-Vector3 localMove = transform.InverseTransformDirection(currentMoveDirection);
-animator.SetFloat("MoveX", localMove.x);
-animator.SetFloat("MoveZ", localMove.z);
-animator.SetFloat("Speed", currentMoveDirection.magnitude);
-animator.SetBool("IsMoving", currentMoveDirection.sqrMagnitude > 0.01f);
-}
+    public void ResetJumpRequest() => jumpRequested = false;
 
-public bool IsGrounded()
-{
-return Physics.Raycast(transform.position + Vector3.up * 0.05f, Vector3.down, 0.15f);
-}
+    // --- 冲刺逻辑 ---
+    public bool TryStartDash()
+    {
+        if (isDashing) return false;
+
+        bool staminaOk = _stamina == null || _stamina.TryConsume(dashCost);
+        if (!staminaOk) return false;
+
+        StartCoroutine(DashCoroutine());
+        return true;
+    }
+
+    private IEnumerator DashCoroutine()
+    {
+        dashDirection = (currentMoveDirection.sqrMagnitude > 0.01f)
+            ? currentMoveDirection
+            : transform.forward;
+        dashDirection.y = 0f;
+        dashDirection.Normalize();
+
+        dashSpeed = dashDistance / Mathf.Max(0.0001f, dashDuration);
+        isDashing = true;
+
+        if (_health != null)
+            _health.SetInvincible(true);
+
+        if (animator != null)
+            animator.SetTrigger("Dash");
+
+        float elapsed = 0f;
+        while (elapsed < dashDuration)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        isDashing = false;
+
+        if (_health != null)
+            _health.SetInvincible(false);
+
+        // 冲刺结束后自动回到Idle或Move状态
+        if (IsMoving())
+            stateMachine.TransitionTo(moveState);
+        else
+            stateMachine.TransitionTo(idleState);
+    }
+
+    // --- 动画更新 ---
+    public void UpdateAnimator()
+    {
+        if (animator == null) return;
+
+        Vector3 localMove = transform.InverseTransformDirection(currentMoveDirection);
+        animator.SetFloat("MoveX", localMove.x);
+        animator.SetFloat("MoveZ", localMove.z);
+        animator.SetFloat("Speed", currentMoveDirection.magnitude);
+        animator.SetBool("IsMoving", currentMoveDirection.sqrMagnitude > 0.01f);
+        animator.SetBool("IsDashing", isDashing);
+    }
+
+    // --- 工具方法 ---
+    public bool IsGrounded()
+    {
+        return Physics.Raycast(transform.position + Vector3.up * 0.05f, Vector3.down, 0.15f);
+    }
 
     public float GetCurrentSpeed() => new Vector2(rb.velocity.x, rb.velocity.z).magnitude;
 
-    // 重点检查这里：IsMoving 必须有完整的大括号包裹
     public bool IsMoving()
     {
         float h = Input.GetAxisRaw("Horizontal");
@@ -151,4 +258,5 @@ return Physics.Raycast(transform.position + Vector3.up * 0.05f, Vector3.down, 0.
         return new Vector2(h, v).sqrMagnitude > 0.01f;
     }
 
+    public bool IsGroundedState() => IsGrounded();
 }
