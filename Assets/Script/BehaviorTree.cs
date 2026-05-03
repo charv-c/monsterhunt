@@ -162,12 +162,50 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class RangedAttackPlayer : Node//远程攻击玩家节点
+    public class RangedAttackPlayer : Node//远程攻击玩家节点（委托给 EnemyRangedAttack 组件执行）
     {
+        private EnemyRangedAttack rangedAttackComponent;
+        private bool hasFired = false;
+
+        /// <summary>
+        /// 构造：传入敌人的 EnemyRangedAttack 组件（在 Enemy 游戏对象上）
+        /// </summary>
+        public RangedAttackPlayer(EnemyRangedAttack rangedAttackComponent)
+        {
+            this.rangedAttackComponent = rangedAttackComponent;
+        }
+
         public override NodeState Evaluate()
         {
-            Debug.Log("远程攻击玩家");
-            return NodeState.SUCCESS;// 返回执行成功
+            if (rangedAttackComponent == null)
+            {
+                Debug.LogWarning("RangedAttackPlayer: rangedAttackComponent is null");
+                return NodeState.FAILURE;
+            }
+
+            if (!hasFired)
+            {
+                bool fired = rangedAttackComponent.TryFire();
+                if (fired)
+                {
+                    hasFired = true;
+                    return NodeState.SUCCESS;
+                }
+                else
+                {
+                    // TryFire 失败可能是因为 prefab 未设置或已发射过
+                    return NodeState.FAILURE;
+                }
+            }
+
+            return NodeState.SUCCESS;
+        }
+
+        public void ResetFired()
+        {
+            hasFired = false;
+            if (rangedAttackComponent != null)
+                rangedAttackComponent.ResetFire();
         }
     }
 
