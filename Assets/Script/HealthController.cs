@@ -82,4 +82,9 @@ public class HealthController : MonoBehaviour
         // 6. ËÀÍö±£»¤
         CurrentHealth = Mathf.Clamp(CurrentHealth, 0, MaxHealth);
     }
+    public void ResetHealth()
+    {
+            CurrentHealth = MaxHealth;
+            RedHealth = 0f;
+    }
 }

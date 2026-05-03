@@ -18,10 +18,6 @@ public class StaminaUI : MonoBehaviour
     [Header("References")]
     public StaminaController TargetStaminaController; // 拖入你的 Player
     public Image FillImage;                           // 拖入上面的 StaminaBar
-
-    [Header("Visual Settings")]
-    public Gradient BarColorGradient; // 可选：随耐力减少改变颜色
-
     void Update()
     {
         if (TargetStaminaController == null || FillImage == null) return;
@@ -31,11 +27,5 @@ public class StaminaUI : MonoBehaviour
 
         // 更新进度条长度
         FillImage.fillAmount = staminaPercent;
-
-        // 可选：更新颜色（例如从绿色变成红色）
-        if (BarColorGradient != null)
-        {
-            FillImage.color = BarColorGradient.Evaluate(staminaPercent);
-        }
     }
 }
