@@ -118,7 +118,13 @@ public class Player : MonoBehaviour
             stateMachine.TransitionTo(idleState); // 如果没有 jumpState，回到 idle（若有 jumpState，可改为 jumpState）
         }
 
-        // 2. 旋转逻辑
+        // 中键按下：面向敌人并同步摄像机
+        if (Input.GetMouseButtonDown(2))
+        {
+            TryFaceEnemyUnderCursor();
+        }
+
+        // 2. 旋转逻辑（鼠标）
         HandleRotation();
 
         // 3. 状态机逻辑更新
@@ -129,10 +135,7 @@ public class Player : MonoBehaviour
         {
             _health.TakeDamage(30f);
         }
-
-        // 中键：兼容性处理 — 如果需要在 Player 层直接处理中键，可以在这里响应（可选）
-        // 实际旋转以接收广播为主（PositionBroadcaster.SendMessage -> OnReceivePositionBroadcast）
-    } 
+    }
 
     void FixedUpdate()
     {
@@ -147,68 +150,104 @@ public class Player : MonoBehaviour
         if (Mathf.Abs(mouseX) > 0.001f)
         {
             transform.Rotate(0f, mouseX, 0f);
-            // 同步 Cinemachine FreeLook 的横轴，使摄像机跟随玩家朝向
-            if (freeLookCamera != null)
-            {
-                try
-                {
-                    freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
-                }
-                catch
-                {
-                    // 兼容性容错：部分 Cinemachine 版本可能访问方式不同
-                }
-            }
+            SyncCameraYawToPlayer();
         }
     }
 
-    /// <summary>
-    /// 刷新相机的旋转，使其面向玩家当前水平朝向（Start 时调用）
-    /// </summary>
+    // --- 在 Start 时或需要时刷新相机，使其朝向玩家朝向 ---
     private void RefreshCameraRotation()
     {
-        if (freeLookCamera == null) return;
-
-        try
-        {
-            // 将 FreeLook 横轴设置为玩家 Y 角度
-            freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
-            // 强制摄像机立即应用当前位置/旋转
-            freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation);
-        }
-        catch
-        {
-            // 若 Cinemachine API 不兼容，安全忽略
-        }
-    }
-
-    /// <summary>
-    /// 接收 PositionBroadcaster 的广播（SendMessage 调用）
-    /// 玩家水平朝向 worldPosition 的方向，摄像机同步移动到该朝向
-    /// </summary>
-    public void OnReceivePositionBroadcast(Vector3 worldPosition)
-    {
-        Vector3 dir = worldPosition - transform.position;
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.0001f) return;
-
-        // 立即朝向目标水平方向（可改为平滑插值）
-        Quaternion targetRot = Quaternion.LookRotation(dir);
-        transform.rotation = Quaternion.Euler(0f, targetRot.eulerAngles.y, 0f);
-
-        // 同步 Cinemachine FreeLook 的横向轴，让相机看向玩家朝向
+        SyncCameraYawToPlayer();
+        // 强制刷新位置/旋转（容错调用，若方法存在）
         if (freeLookCamera != null)
         {
             try
             {
-                freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
                 freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation);
             }
-            catch
+            catch { }
+        }
+    }
+
+    // 将 Cinemachine FreeLook 的横向轴（m_XAxis）与玩家 Y 角度同步
+    private void SyncCameraYawToPlayer()
+    {
+        if (freeLookCamera == null) return;
+        try
+        {
+            // m_XAxis.Value 表示自由环绕摄像机的横向角度（度数）
+            freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
+        }
+        catch
+        {
+            // 若 Cinemachine 版本 API 不同则忽略失败
+        }
+    }
+
+    // --- 鼠标中键：尝试面向光标下的敌人，若找不到则尝试最近的 EnemyAI ---
+    private void TryFaceEnemyUnderCursor()
+    {
+        // 首先做射线检测
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+        Transform enemy = null;
+
+        if (Physics.Raycast(ray, out hit, 200f))
+        {
+            enemy = ResolveEnemyTransform(hit.transform);
+        }
+
+        // 如果射线没有命中敌人，尝试找最近的带 EnemyAI 的对象
+        if (enemy == null)
+        {
+            EnemyAI[] ais = GameObject.FindObjectsOfType<EnemyAI>();
+            float bestDist = float.MaxValue;
+            foreach (var a in ais)
             {
-                // 容错：忽略不支持的 API 调用
+                float d = Vector3.SqrMagnitude(a.transform.position - transform.position);
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    enemy = a.transform;
+                }
             }
         }
+
+        if (enemy != null)
+        {
+            FaceTargetHorizontal(enemy.position);
+            SyncCameraYawToPlayer();
+            // 强制刷新相机位置/旋转（可选）
+            if (freeLookCamera != null)
+            {
+                try { freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation); } catch { }
+            }
+        }
+    }
+
+    // 根据射线命中的 Transform，尝试解析出敌人的根 Transform（支持 Tag/EnemyAI/BehaviorTree/EnemyRangedAttack）
+    private Transform ResolveEnemyTransform(Transform t)
+    {
+        if (t == null) return null;
+        if (t.CompareTag("Enemy")) return t;
+        var ai = t.GetComponentInParent<EnemyAI>();
+        if (ai != null) return ai.transform;
+        var bt = t.GetComponentInParent<BehaviorTree>();
+        if (bt != null) return bt.transform;
+        var er = t.GetComponentInParent<EnemyRangedAttack>();
+        if (er != null) return er.transform;
+        // 没有识别的敌人组件，返回 null
+        return null;
+    }
+
+    // 仅在水平面上朝向目标位置
+    private void FaceTargetHorizontal(Vector3 worldPosition)
+    {
+        Vector3 dir = worldPosition - transform.position;
+        dir.y = 0f;
+        if (dir.sqrMagnitude <= 0.0001f) return;
+        Quaternion rot = Quaternion.LookRotation(dir);
+        transform.rotation = Quaternion.Euler(0f, rot.eulerAngles.y, 0f);
     }
 
     // --- 移动处理（供状态机调用）---
