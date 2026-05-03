@@ -122,7 +122,7 @@ NavMeshSettings:
     preserveTilesOutsideBounds: 0
     debug:
       m_Flags: 0
-  m_NavMeshData: {fileID: 0}
+  m_NavMeshData: {fileID: 23800000, guid: 26dd84ceb1e74ca4b94ffc5f3c98e112, type: 2}
 --- !u!1 &41581822
 GameObject:
   m_ObjectHideFlags: 0
@@ -528,8 +528,8 @@ GameObject:
   m_Name: Cube (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_NavMeshLayer: 1
+  m_StaticEditorFlags: 8
   m_IsActive: 1
 --- !u!65 &721449652
 BoxCollider:
@@ -745,7 +745,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 8
   m_IsActive: 1
 --- !u!65 &1172799366
 BoxCollider:
@@ -819,7 +819,7 @@ Transform:
   m_GameObject: {fileID: 1172799365}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -2.59, z: 0}
-  m_LocalScale: {x: 22.342012, y: 0.9243254, z: 22.342012}
+  m_LocalScale: {x: 51.01575, y: 0.9243254, z: 53.06451}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -1243,6 +1243,10 @@ PrefabInstance:
     - target: {fileID: 3602688535958347352, guid: 8d1902946c29ceb4c8888d75eb3e7640, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7361970069715853208, guid: 8d1902946c29ceb4c8888d75eb3e7640, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 5.91
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 8d1902946c29ceb4c8888d75eb3e7640, type: 3}
