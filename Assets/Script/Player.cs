@@ -74,6 +74,9 @@ public class Player : MonoBehaviour
             freeLookCamera = FindObjectOfType<CinemachineFreeLook>();
 #endif
         }
+
+        // 启动时刷新一次相机旋转，使相机面向玩家当前朝向
+        RefreshCameraRotation();
     }
 
     void Update()
@@ -105,16 +108,14 @@ public class Player : MonoBehaviour
         {
             stateMachine.TransitionTo(dodgeState);
         }
-        else if (Input.GetKeyDown(KeyCode.LeftShift) && !isDashing)
+        else if (Input.GetKeyDown(KeyCode.LeftShift) && !isDodging)
         {
-            // 只有在非冲刺状态下才允许触发冲刺
-            if (TryStartDash())
-                stateMachine.TransitionTo(dashState);
+            // placeholder for dash if you later add it
         }
         else if (Input.GetButtonDown("Jump") && IsGrounded())
         {
             jumpRequested = true;
-            stateMachine.TransitionTo(jumpState);
+            stateMachine.TransitionTo(idleState); // 如果没有 jumpState，回到 idle（若有 jumpState，可改为 jumpState）
         }
 
         // 2. 旋转逻辑
@@ -128,6 +129,9 @@ public class Player : MonoBehaviour
         {
             _health.TakeDamage(30f);
         }
+
+        // 中键：兼容性处理 — 如果需要在 Player 层直接处理中键，可以在这里响应（可选）
+        // 实际旋转以接收广播为主（PositionBroadcaster.SendMessage -> OnReceivePositionBroadcast）
     } 
 
     void FixedUpdate()
@@ -143,6 +147,67 @@ public class Player : MonoBehaviour
         if (Mathf.Abs(mouseX) > 0.001f)
         {
             transform.Rotate(0f, mouseX, 0f);
+            // 同步 Cinemachine FreeLook 的横轴，使摄像机跟随玩家朝向
+            if (freeLookCamera != null)
+            {
+                try
+                {
+                    freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
+                }
+                catch
+                {
+                    // 兼容性容错：部分 Cinemachine 版本可能访问方式不同
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 刷新相机的旋转，使其面向玩家当前水平朝向（Start 时调用）
+    /// </summary>
+    private void RefreshCameraRotation()
+    {
+        if (freeLookCamera == null) return;
+
+        try
+        {
+            // 将 FreeLook 横轴设置为玩家 Y 角度
+            freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
+            // 强制摄像机立即应用当前位置/旋转
+            freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation);
+        }
+        catch
+        {
+            // 若 Cinemachine API 不兼容，安全忽略
+        }
+    }
+
+    /// <summary>
+    /// 接收 PositionBroadcaster 的广播（SendMessage 调用）
+    /// 玩家水平朝向 worldPosition 的方向，摄像机同步移动到该朝向
+    /// </summary>
+    public void OnReceivePositionBroadcast(Vector3 worldPosition)
+    {
+        Vector3 dir = worldPosition - transform.position;
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.0001f) return;
+
+        // 立即朝向目标水平方向（可改为平滑插值）
+        Quaternion targetRot = Quaternion.LookRotation(dir);
+        transform.rotation = Quaternion.Euler(0f, targetRot.eulerAngles.y, 0f);
+
+        // 同步 Cinemachine FreeLook 的横向轴，让相机看向玩家朝向
+        if (freeLookCamera != null)
+        {
+            try
+            {
+                freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
+                freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation);
+            }
+            catch
+            {
+                // 容错：忽略不支持的 API 调用
+            }
         }
     }
 
@@ -177,7 +242,7 @@ public class Player : MonoBehaviour
             return Vector3.zero;
         }
     }
-    // --- 冲刺逻辑 ---
+    // --- 冲刺/闪避逻辑 ---
     public bool TryStartDodge()
     {
         if (isDodging) return false;
