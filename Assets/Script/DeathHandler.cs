@@ -51,5 +51,6 @@ public class DeathHandler : MonoBehaviour
     public void Revive()
     {
         IsDead = false;
+        Debug.Log("<color=cyan>【DeathHandler】状态已重置：IsDead = false，允许再次死亡！</color>");
     }
 }

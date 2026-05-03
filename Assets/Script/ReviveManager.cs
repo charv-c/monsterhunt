@@ -4,7 +4,8 @@ public class ReviveManager : MonoBehaviour
 {
     [Header("UI 设置")]
     public GameObject DeathUIPanel; // 拖入你的死亡界面 Panel
-
+    [Header("目标玩家")]
+    public GameObject TargetPlayer; // 【加这行】明确告诉它主角是谁
     private Vector3 _spawnPoint;
     private Quaternion _spawnRotation;
 
@@ -21,24 +22,24 @@ public class ReviveManager : MonoBehaviour
         _spawnRotation = transform.rotation;
 
         // 获取引用
-        _health = GetComponent<HealthController>();
-        _stamina = GetComponent<StaminaController>();
-        _player = GetComponent<Player>();
-        _deathHandler = GetComponent<DeathHandler>();
-        _animator = GetComponent<Animator>();
+        _health = TargetPlayer.GetComponent<HealthController>();
+        _stamina = TargetPlayer.GetComponent<StaminaController>();
+        _player = TargetPlayer.GetComponent<Player>();
+        _deathHandler = TargetPlayer.GetComponent<DeathHandler>();
+        _animator = TargetPlayer.GetComponent<Animator>();
     }
 
     // 这个方法绑定到 UI 按钮的 OnClick 事件上
     public void PerformRevive()
     {
+        if (TargetPlayer == null) return;
+
         // 1. 坐标重置
-        transform.position = _spawnPoint;
-        transform.rotation = _spawnRotation;
+        TargetPlayer.transform.position = _spawnPoint; // 【修改】改为 TargetPlayer
+        TargetPlayer.transform.rotation = _spawnRotation;
 
         // 2. 数值重置
         if (_health != null) _health.ResetHealth();
-        // 如果 StaminaController 没有 Reset，可以直接暴力设置：
-        // _stamina.TryConsume(-100); 
 
         // 3. 脚本与逻辑重置
         if (_player != null) _player.enabled = true;
@@ -47,8 +48,8 @@ public class ReviveManager : MonoBehaviour
         // 4. 动画状态重置
         if (_animator != null)
         {
-            // 强制回到 Idle 状态，防止卡在死亡动画里
-            _animator.Play("Movement", 0, 0f);
+            _animator.Play("Locomotion", 0, 0f); // 【修改】名字改为 Locomotion
+            _animator.ResetTrigger("Die");       // 【新增】清除死亡触发器残留
         }
 
         // 5. 隐藏死亡 UI

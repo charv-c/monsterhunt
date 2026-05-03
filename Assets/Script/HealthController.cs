@@ -79,12 +79,12 @@ public class HealthController : MonoBehaviour
         // 5. 重置回复延迟
         _delayTimer = RecoveryDelay;
 
-        // 6. 死亡保护
-        CurrentHealth = Mathf.Clamp(CurrentHealth, 0, MaxHealth);
+  
     }
     public void ResetHealth()
     {
-            CurrentHealth = MaxHealth;
-            RedHealth = 0f;
+        CurrentHealth = MaxHealth;
+        RedHealth = 0f;
+        SetInvincible(false); // 【加这行】防止死在闪避帧里导致永久无敌
     }
 }
