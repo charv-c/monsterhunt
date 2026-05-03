@@ -25,6 +25,10 @@ public class Player : MonoBehaviour
     public float dodgeCooldown = 0.8f;   // 闪避冷却时间
     public float dodgeCost = 20f;        // 闪避消耗耐力
 
+    [Header("朝向敌人平滑设置")]
+    [Tooltip("按下中键时朝向敌人旋转时长（秒）")]
+    public float faceTargetDuration = 0.1f;
+
     // --- 内部状态 ---
     [HideInInspector] public bool isDodging = false;
     private float lastDodgeTime = -1f;
@@ -35,6 +39,11 @@ public class Player : MonoBehaviour
     private bool jumpRequested;
     private StaminaController _stamina;
     private HealthController _health;
+
+    // 平滑朝向控制
+    private bool isFacingSmooth = false;      // 正在平滑朝向目标期间为 true（用于忽略鼠标水平输入）
+    private Coroutine faceCoroutine = null;
+
     // --- 状态机 ---
     public PlayerStateMachine stateMachine;
     public PlayerIdleState idleState;
@@ -94,15 +103,10 @@ public class Player : MonoBehaviour
         }
         else if (Input.GetKeyDown(KeyCode.R))
         {
-            // 如果当前已经是防御状态，就切回闲置；否则进入防御
             if (stateMachine.CurrentState == guardState)
-            {
                 stateMachine.TransitionTo(idleState);
-            }
             else
-            {
                 stateMachine.TransitionTo(guardState);
-            }
         }
         else if (Input.GetKeyDown(KeyCode.Space) && !isDodging && Time.time >= lastDodgeTime + dodgeCooldown)
         {
@@ -121,7 +125,7 @@ public class Player : MonoBehaviour
         // 中键按下：面向敌人并同步摄像机
         if (Input.GetMouseButtonDown(2))
         {
-            TryFaceEnemyUnderCursor();
+            TryFaceEnemyUnderCursorSmooth();
         }
 
         // 2. 旋转逻辑（鼠标）
@@ -175,7 +179,6 @@ public class Player : MonoBehaviour
         if (freeLookCamera == null) return;
         try
         {
-            // m_XAxis.Value 表示自由环绕摄像机的横向角度（度数）
             freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
         }
         catch
@@ -184,8 +187,8 @@ public class Player : MonoBehaviour
         }
     }
 
-    // --- 鼠标中键：尝试面向光标下的敌人，若找不到则尝试最近的 EnemyAI ---
-    private void TryFaceEnemyUnderCursor()
+    // --- 鼠标中键：平滑面向目标（优先光标下的敌人，否则最近敌人） ---
+    private void TryFaceEnemyUnderCursorSmooth()
     {
         // 首先做射线检测
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -215,17 +218,10 @@ public class Player : MonoBehaviour
 
         if (enemy != null)
         {
-            FaceTargetHorizontal(enemy.position);
-            SyncCameraYawToPlayer();
-            // 强制刷新相机位置/旋转（可选）
-            if (freeLookCamera != null)
-            {
-                try { freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation); } catch { }
-            }
+            StartFaceTargetSmooth(enemy.position, faceTargetDuration);
         }
     }
 
-    // 根据射线命中的 Transform，尝试解析出敌人的根 Transform（支持 Tag/EnemyAI/BehaviorTree/EnemyRangedAttack）
     private Transform ResolveEnemyTransform(Transform t)
     {
         if (t == null) return null;
@@ -236,18 +232,73 @@ public class Player : MonoBehaviour
         if (bt != null) return bt.transform;
         var er = t.GetComponentInParent<EnemyRangedAttack>();
         if (er != null) return er.transform;
-        // 没有识别的敌人组件，返回 null
         return null;
     }
 
-    // 仅在水平面上朝向目标位置
-    private void FaceTargetHorizontal(Vector3 worldPosition)
+    private void StartFaceTargetSmooth(Vector3 worldPosition, float duration)
+    {
+        if (faceCoroutine != null)
+        {
+            StopCoroutine(faceCoroutine);
+            faceCoroutine = null;
+            isFacingSmooth = false;
+        }
+        faceCoroutine = StartCoroutine(FaceTargetSmoothCoroutine(worldPosition, duration));
+    }
+
+    private IEnumerator FaceTargetSmoothCoroutine(Vector3 worldPosition, float duration)
     {
         Vector3 dir = worldPosition - transform.position;
         dir.y = 0f;
-        if (dir.sqrMagnitude <= 0.0001f) return;
-        Quaternion rot = Quaternion.LookRotation(dir);
-        transform.rotation = Quaternion.Euler(0f, rot.eulerAngles.y, 0f);
+        if (dir.sqrMagnitude < 0.0001f)
+            yield break;
+
+        float startYaw = transform.eulerAngles.y;
+        float targetYaw = Quaternion.LookRotation(dir).eulerAngles.y;
+        // 使用最短角度差
+        float delta = Mathf.DeltaAngle(startYaw, targetYaw);
+
+        if (duration <= 0f)
+        {
+            transform.rotation = Quaternion.Euler(0f, targetYaw, 0f);
+            SyncCameraYawToPlayer();
+            yield break;
+        }
+
+        isFacingSmooth = true;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float yaw = startYaw + delta * t;
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+
+            // 同步摄像机横轴
+            if (freeLookCamera != null)
+            {
+                try
+                {
+                    freeLookCamera.m_XAxis.Value = yaw;
+                }
+                catch { }
+            }
+
+            yield return null;
+        }
+
+        // Ensure final exact rotation
+        transform.rotation = Quaternion.Euler(0f, targetYaw, 0f);
+        SyncCameraYawToPlayer();
+
+        // 强制刷新摄像机位置/旋转（celan final)
+        if (freeLookCamera != null)
+        {
+            try { freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation); } catch { }
+        }
+
+        isFacingSmooth = false;
+        faceCoroutine = null;
     }
 
     // --- 移动处理（供状态机调用）---
