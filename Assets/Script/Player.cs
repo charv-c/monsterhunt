@@ -58,78 +58,78 @@ public class Player : MonoBehaviour
 
         if (Input.GetButtonDown("Jump"))
             jumpRequested = true;
-    }
-    // 新增：测试代码，按 K 键扣 30 点血
+        // 新增：测试代码，按 K 键扣 30 点血
         if (Input.GetKeyDown(KeyCode.K))
         {
             if (_health != null) _health.TakeDamage(30f);
         }
+        }
 void FixedUpdate()
+{
+    // 处理移动（基于玩家自身朝向）
+    Vector3 horizontalVelocity = HandleMovement();
+
+    // 保持当前垂直速度，只覆盖水平速度
+    Vector3 newVelocity = new Vector3(horizontalVelocity.x, rb.velocity.y, horizontalVelocity.z);
+    rb.velocity = newVelocity;
+
+    // 跳跃：施加瞬时力
+    if (jumpRequested && IsGrounded())
     {
-        // 处理移动（基于玩家自身朝向）
-        Vector3 horizontalVelocity = HandleMovement();
-
-        // 保持当前垂直速度，只覆盖水平速度
-        Vector3 newVelocity = new Vector3(horizontalVelocity.x, rb.velocity.y, horizontalVelocity.z);
-        rb.velocity = newVelocity;
-
-        // 跳跃：施加瞬时力
-        if (jumpRequested && IsGrounded())
+        // 只有在 StaminaController 允许消耗时才执行跳跃
+        if (_stamina != null && _stamina.TryConsume(_stamina.JumpCost))
         {
-            // 只有在 StaminaController 允许消耗时才执行跳跃
-            if (_stamina != null && _stamina.TryConsume(_stamina.JumpCost))
-            {
-                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            }
-            jumpRequested = false;
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
         }
-
-        UpdateAnimator();
+        jumpRequested = false;
     }
 
-    Vector3 HandleMovement()
+    UpdateAnimator();
+}
+
+Vector3 HandleMovement()
+{
+    float horizontal = Input.GetAxisRaw("Horizontal");
+    float vertical = Input.GetAxisRaw("Vertical");
+
+    // 基于玩家自身朝向计算移动方向
+    Vector3 forward = transform.forward;
+    forward.y = 0f;
+    forward.Normalize();
+
+    Vector3 right = transform.right;
+    right.y = 0f;
+    right.Normalize();
+
+    Vector3 moveDirection = (forward * vertical + right * horizontal).normalized;
+
+    // 判断逻辑：按下 Shift 且耐力大于 0
+    bool canSprint = Input.GetKey(KeyCode.LeftShift) && _stamina != null && _stamina.CurrentStamina > 0;
+    float currentSpeed = moveSpeed * (canSprint ? sprintMultiplier : 1f);
+
+    if (moveDirection.sqrMagnitude > 0.01f)
     {
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
-
-        // 基于玩家自身朝向计算移动方向
-        Vector3 forward = transform.forward;
-        forward.y = 0f;
-        forward.Normalize();
-
-        Vector3 right = transform.right;
-        right.y = 0f;
-        right.Normalize();
-
-        Vector3 moveDirection = (forward * vertical + right * horizontal).normalized;
-
-        // 判断逻辑：按下 Shift 且耐力大于 0
-        bool canSprint = Input.GetKey(KeyCode.LeftShift) && _stamina != null && _stamina.CurrentStamina > 0;
-        float currentSpeed = moveSpeed * (canSprint ? sprintMultiplier : 1f);
-
-        if (moveDirection.sqrMagnitude > 0.01f)
+        // 如果正在冲刺，持续扣除耐力
+        if (canSprint)
         {
-            // 如果正在冲刺，持续扣除耐力
-            if (canSprint)
-            {
-                _stamina.ConsumeContinuous(_stamina.SprintCost);
-            }
+            _stamina.ConsumeContinuous(_stamina.SprintCost);
+        }
 
-            currentMoveDirection = moveDirection;
-            return moveDirection * currentSpeed;
-        }
-        else
-        {
-            // 路径 2：必须处理没有移动输入的情况
-            currentMoveDirection = Vector3.zero;
-            return Vector3.zero;
-        }
+        currentMoveDirection = moveDirection;
+        return moveDirection * currentSpeed;
     }
-
-    bool IsGrounded()
+    else
     {
-        return Physics.Raycast(transform.position + Vector3.up * 0.05f, Vector3.down, 0.15f);
+        // 路径 2：必须处理没有移动输入的情况
+        currentMoveDirection = Vector3.zero;
+        return Vector3.zero;
     }
+}
+
+bool IsGrounded()
+{
+    return Physics.Raycast(transform.position + Vector3.up * 0.05f, Vector3.down, 0.15f);
+}
 
     void UpdateAnimator()
     {
@@ -141,8 +141,7 @@ void FixedUpdate()
         animator.SetFloat("Speed", currentMoveDirection.magnitude);
         animator.SetBool("IsMoving", currentMoveDirection.sqrMagnitude > 0.01f);
     }
-
-    public float GetCurrentSpeed() => new Vector2(rb.velocity.x, rb.velocity.z).magnitude;
-    public bool IsMoving() => currentMoveDirection.sqrMagnitude > 0.01f;
-    public bool IsGroundedState() => IsGrounded();
+public float GetCurrentSpeed() => new Vector2(rb.velocity.x, rb.velocity.z).magnitude;
+public bool IsMoving() => currentMoveDirection.sqrMagnitude > 0.01f;
+public bool IsGroundedState() => IsGrounded();
 }
