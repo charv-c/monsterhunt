@@ -1,24 +1,23 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.AI;
 
 public class BehaviorTree : MonoBehaviour
 {
-    public enum NodeState//节点状态
+    public enum NodeState
     {
         RUNNING,
         SUCCESS,
         FAILURE
     }
 
-    public abstract class Node//抽象节点类
+    public abstract class Node
     {
         public abstract NodeState Evaluate();
     }
 
-    public class Selector : Node//选择节点
+    public class Selector : Node
     {
         private List<Node> nodes = new List<Node>();
         public Selector(List<Node> nodes)
@@ -45,7 +44,7 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class Sequence : Node//序列节点
+    public class Sequence : Node
     {
         private List<Node> nodes = new List<Node>();
         public Sequence(List<Node> nodes)
@@ -74,23 +73,136 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class ObservePlayer : Node//观察玩家节点
+    // ========== 条件节点 ==========
+
+    /// <summary>
+    /// 检查与玩家的距离是否在指定范围内
+    /// </summary>
+    public class CheckDistance : Node
+    {
+        private Transform enemyTransform;
+        private Transform playerTransform;
+        private float minDistance;
+        private float maxDistance;
+
+        public CheckDistance(Transform enemyTransform, Transform playerTransform, float minDistance, float maxDistance)
+        {
+            this.enemyTransform = enemyTransform;
+            this.playerTransform = playerTransform;
+            this.minDistance = minDistance;
+            this.maxDistance = maxDistance;
+        }
+
+        public override NodeState Evaluate()
+        {
+            if (playerTransform == null) return NodeState.FAILURE;
+
+            float distance = Vector3.Distance(enemyTransform.position, playerTransform.position);
+            if (distance >= minDistance && distance <= maxDistance)
+            {
+                return NodeState.SUCCESS;
+            }
+            return NodeState.FAILURE;
+        }
+    }
+
+    /// <summary>
+    /// 检查与玩家的距离是否大于指定值
+    /// </summary>
+    public class CheckDistanceGreater : Node
+    {
+        private Transform enemyTransform;
+        private Transform playerTransform;
+        private float threshold;
+
+        public CheckDistanceGreater(Transform enemyTransform, Transform playerTransform, float threshold)
+        {
+            this.enemyTransform = enemyTransform;
+            this.playerTransform = playerTransform;
+            this.threshold = threshold;
+        }
+
+        public override NodeState Evaluate()
+        {
+            if (playerTransform == null) return NodeState.FAILURE;
+
+            float distance = Vector3.Distance(enemyTransform.position, playerTransform.position);
+            if (distance > threshold)
+            {
+                return NodeState.SUCCESS;
+            }
+            return NodeState.FAILURE;
+        }
+    }
+
+    // ========== 行为节点 ==========
+
+    /// <summary>
+    /// 靠近玩家：直接朝玩家移动
+    /// </summary>
+    public class ApproachPlayer : Node
+    {
+        private Transform enemyTransform;
+        private Transform playerTransform;
+        private NavMeshAgent agent;
+        private float approachSpeed = 5f;
+        private float stopDistance = 3f;
+
+        public ApproachPlayer(Transform enemyTransform, Transform playerTransform, NavMeshAgent agent)
+        {
+            this.enemyTransform = enemyTransform;
+            this.playerTransform = playerTransform;
+            this.agent = agent;
+        }
+
+        public override NodeState Evaluate()
+        {
+            if (playerTransform == null) return NodeState.FAILURE;
+
+            float distance = Vector3.Distance(enemyTransform.position, playerTransform.position);
+            if (distance <= stopDistance)
+            {
+                agent.isStopped = true;
+                agent.ResetPath();
+                return NodeState.SUCCESS;
+            }
+
+            agent.isStopped = false;
+            agent.speed = approachSpeed;
+            agent.SetDestination(playerTransform.position);
+
+            // 面朝玩家
+            Vector3 lookDirection = (playerTransform.position - enemyTransform.position).normalized;
+            if (lookDirection != Vector3.zero)
+            {
+                Quaternion rot = Quaternion.LookRotation(lookDirection);
+                enemyTransform.rotation = Quaternion.Slerp(enemyTransform.rotation, rot, Time.deltaTime * 5f);
+            }
+
+            return NodeState.RUNNING;
+        }
+    }
+
+    /// <summary>
+    /// 观察玩家：绕圈运动，保持距离
+    /// </summary>
+    public class ObservePlayer : Node
     {
         private Transform enemyTransform;
         private Transform playerTransform;
         private NavMeshAgent agent;
 
-        private float targetDistance = 7f;//敌人观察玩家的距离
-        private float chaseSpeed = 2f;//敌人追逐玩家的速度
-        private float orbitSpeed = 2f;//敌人绕圈速度
-        private float deadZone = 0.5f;       // 防抖动死区范围
+        private float targetDistance = 7f;
+        private float chaseSpeed = 2f;
+        private float orbitSpeed = 2f;
+        private float deadZone = 0.5f;
 
-        private bool isStart = false;              // 是否开始观察
+        private bool isStart = false;
         private float orbitDirection = 1f;
-        private float GeneOrbitDirection;        // 顺/逆时针
+        private float GeneOrbitDirection;
 
-        private float ObserveTime = 3f;          // 观察时间
-        private float timer = 0f;                // 观察计时器
+        private float ObserveTime = 3f;
+        private float timer = 0f;
 
         public ObservePlayer(Transform enemyTransform, Transform playerTransform, NavMeshAgent agent)
         {
@@ -103,17 +215,16 @@ public class BehaviorTree : MonoBehaviour
         {
             if (playerTransform == null)
             {
-                return NodeState.FAILURE; // 玩家不存在，返回失败
+                return NodeState.FAILURE;
             }
 
             if (!isStart)
             {
                 GeneOrbitDirection = Random.value > 0.5f ? -1f : 1f;
-                Debug.Log(GeneOrbitDirection);
-                isStart = true;//随机选择顺时针或逆时针绕圈
+                isStart = true;
             }
 
-            timer += Time.deltaTime;//计时
+            timer += Time.deltaTime;
 
             Vector3 enemyPos = enemyTransform.position;
             Vector3 playerPos = playerTransform.position;
@@ -123,18 +234,19 @@ public class BehaviorTree : MonoBehaviour
             float error = distanceToPlayer - targetDistance;
 
             Vector3 radial = Vector3.zero;
-
             if (Mathf.Abs(error) > deadZone)
             {
                 radial = directionToPlayer * error * chaseSpeed;
-            }//防止抖动
+            }
 
             orbitDirection = Mathf.Lerp(orbitDirection, GeneOrbitDirection, Time.deltaTime * 2f);
             Vector3 tangent = Vector3.Cross(Vector3.up, directionToPlayer).normalized * orbitDirection;
-            Vector3 orbit = tangent * orbitSpeed;//实现绕圈
+            Vector3 orbit = tangent * orbitSpeed;
 
             Vector3 moveDirection = radial + orbit;
             Vector3 targetPos = enemyPos + moveDirection;
+
+            agent.isStopped = false;
             agent.SetDestination(targetPos);
 
             Vector3 lookDirection = (playerPos - enemyPos).normalized;
@@ -143,36 +255,46 @@ public class BehaviorTree : MonoBehaviour
                 Quaternion rot = Quaternion.LookRotation(lookDirection);
                 enemyTransform.rotation = Quaternion.Slerp(enemyTransform.rotation, rot, Time.deltaTime * 5f);
             }
+
             if (timer >= ObserveTime)
             {
-                timer = 0f; // 重置计时器
-                isStart = false; // 重置观察状态
-                return NodeState.SUCCESS; // 观察完成，返回成功
+                timer = 0f;
+                isStart = false;
+                return NodeState.SUCCESS;
             }
 
             return NodeState.RUNNING;
         }
+
+        public void Reset()
+        {
+            timer = 0f;
+            isStart = false;
+        }
     }
-    public class MeleeAttackPlayer : Node//近战攻击玩家节点
+
+    public class MeleeAttackPlayer : Node
     {
         public override NodeState Evaluate()
         {
             Debug.Log("近战攻击玩家");
-            return NodeState.SUCCESS;// 返回执行成功
+            return NodeState.SUCCESS;
         }
     }
 
-    public class RangedAttackPlayer : Node//远程攻击玩家节点（委托给 EnemyRangedAttack 组件执行）
+    /// <summary>
+    /// 远程攻击玩家：停止移动，发射飞刀
+    /// </summary>
+    public class RangedAttackPlayer : Node
     {
         private EnemyRangedAttack rangedAttackComponent;
+        private NavMeshAgent agent;
         private bool hasFired = false;
 
-        /// <summary>
-        /// 构造：传入敌人的 EnemyRangedAttack 组件（在 Enemy 游戏对象上）
-        /// </summary>
-        public RangedAttackPlayer(EnemyRangedAttack rangedAttackComponent)
+        public RangedAttackPlayer(EnemyRangedAttack rangedAttackComponent, NavMeshAgent agent)
         {
             this.rangedAttackComponent = rangedAttackComponent;
+            this.agent = agent;
         }
 
         public override NodeState Evaluate()
@@ -181,6 +303,13 @@ public class BehaviorTree : MonoBehaviour
             {
                 Debug.LogWarning("RangedAttackPlayer: rangedAttackComponent is null");
                 return NodeState.FAILURE;
+            }
+
+            // 停止移动
+            if (agent != null)
+            {
+                agent.isStopped = true;
+                agent.ResetPath();
             }
 
             if (!hasFired)
@@ -193,7 +322,6 @@ public class BehaviorTree : MonoBehaviour
                 }
                 else
                 {
-                    // TryFire 失败可能是因为 prefab 未设置或已发射过
                     return NodeState.FAILURE;
                 }
             }
@@ -209,24 +337,66 @@ public class BehaviorTree : MonoBehaviour
         }
     }
 
-    public class SetTrap : Node//设置陷阱节点
+    /// <summary>
+    /// 放置陷阱：停止移动，放置陷阱
+    /// </summary>
+    public class SetTrap : Node
     {
+        private EnemySetTrap trapComponent;
+        private NavMeshAgent agent;
+        private bool hasPlaced = false;
+
+        public SetTrap(EnemySetTrap trapComponent, NavMeshAgent agent)
+        {
+            this.trapComponent = trapComponent;
+            this.agent = agent;
+        }
+
         public override NodeState Evaluate()
         {
-            Debug.Log("设置陷阱");
-            return NodeState.SUCCESS;// 返回执行成功
+            if (trapComponent == null)
+            {
+                Debug.LogWarning("SetTrap: trapComponent is null");
+                return NodeState.FAILURE;
+            }
+
+            // 停止移动
+            if (agent != null)
+            {
+                agent.isStopped = true;
+                agent.ResetPath();
+            }
+
+            if (!hasPlaced)
+            {
+                bool placed = trapComponent.TryPlaceTrap();
+                if (placed)
+                {
+                    hasPlaced = true;
+                    Debug.Log("放置陷阱成功");
+                    return NodeState.SUCCESS;
+                }
+                else
+                {
+                    // 可能已存在陷阱或prefab未设置
+                    return NodeState.FAILURE;
+                }
+            }
+
+            return NodeState.SUCCESS;
+        }
+
+        public void ResetPlaced()
+        {
+            hasPlaced = false;
         }
     }
 
-        // Start is called before the first frame update
     void Start()
     {
-        
     }
 
-    // Update is called once per frame
     void Update()
     {
-        
     }
 }
