@@ -1162,6 +1162,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6308935550040912147, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
   m_PrefabInstance: {fileID: 8790784825411195242}
   m_PrefabAsset: {fileID: 0}
+--- !u!54 &1754250195 stripped
+Rigidbody:
+  m_CorrespondingSourceObject: {fileID: 2720726157190994707, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
+  m_PrefabInstance: {fileID: 8790784825411195242}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1970076832
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1357,6 +1362,10 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1754250196, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
+      propertyPath: rb
+      value: 
+      objectReference: {fileID: 1754250195}
     - target: {fileID: 1754250196, guid: c0042757a0a0d8e448f0761107e2d3b2, type: 3}
       propertyPath: freeLookCamera
       value: 

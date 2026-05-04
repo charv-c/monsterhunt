@@ -3927,9 +3927,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b15d30ae14105c4dbaed3c0bb6e190e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  narrationPanel: {fileID: 1708342414}
-  choicePanel: {fileID: 611957178}
-  isNarrationFinished: 0
+  storySteps: []
+  sceneKey: Story_Flexible_01
+  xh_debugMode: 1
+  nextButton: {fileID: 0}
+  xh_npcPanel: {fileID: 0}
+  xh_npcText: {fileID: 0}
+  xh_playerPanel: {fileID: 0}
+  xh_playerText: {fileID: 0}
+  xh_presetPanels: []
+  xh_fPrompt: {fileID: 0}
 --- !u!114 &5175750188152334192
 MonoBehaviour:
   m_ObjectHideFlags: 0
