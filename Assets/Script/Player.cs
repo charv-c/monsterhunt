@@ -25,6 +25,11 @@ public class Player : MonoBehaviour
     public float dodgeCooldown = 0.8f;   // 闪避冷却时间
     public float dodgeCost = 20f;        // 闪避消耗耐力
 
+    [Header("索敌与转向")]
+    public float targetTurnDuration = 0.1f; // 中键索敌后旋转所用时间
+    public float maxTargetSearchDistance = 50f; // 搜索敌人最大距离
+    private Coroutine _turnCoroutine;
+
     // --- 内部状态 ---
     [HideInInspector] public bool isDodging = false;
     private float lastDodgeTime = -1f;
@@ -77,6 +82,21 @@ public class Player : MonoBehaviour
 
     void Update()
     {
+        // 中键索敌：找到最近敌人并在 targetTurnDuration 内朝向敌人，摄像机同步旋转
+        if (Input.GetMouseButtonDown(2))
+        {
+            Transform enemy = FindNearestEnemy(maxTargetSearchDistance);
+            if (enemy != null)
+            {
+                if (_turnCoroutine != null) StopCoroutine(_turnCoroutine);
+                _turnCoroutine = StartCoroutine(TurnToEnemyCoroutine(enemy, targetTurnDuration));
+            }
+            else
+            {
+                Debug.Log("<color=cyan>未找到合适的敌人目标</color>");
+            }
+        }
+
         // 1. 输入检测
         if (Input.GetMouseButtonDown(0))
         {
@@ -134,17 +154,111 @@ public class Player : MonoBehaviour
         }
     }
 
+    // --- 中键索敌并平滑转向协程 ---
+    private IEnumerator TurnToEnemyCoroutine(Transform enemy, float duration)
+    {
+        if (enemy == null || duration <= 0f)
+        {
+            yield break;
+        }
+
+        // 目标方向（仅水平）
+        Vector3 dir = enemy.position - transform.position;
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.0001f) yield break;
+
+        Quaternion startRot = transform.rotation;
+        Quaternion targetRot = Quaternion.LookRotation(dir.normalized, Vector3.up);
+
+        // 摄像机轴角度：尝试使用 freeLookCamera 的 m_XAxis（若存在）
+        bool hasFreeLook = freeLookCamera != null;
+        float startCamYaw = 0f;
+        float targetCamYaw = 0f;
+        if (hasFreeLook)
+        {
+            // 当前 yaw（度）
+            startCamYaw = freeLookCamera.m_XAxis.Value;
+            // 目标 yaw 取目标朝向的 y 欧拉角
+            targetCamYaw = targetRot.eulerAngles.y;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            float t = Mathf.Clamp01(elapsed / duration);
+            // 使用球形插值平滑转向
+            transform.rotation = Quaternion.Slerp(startRot, targetRot, t);
+
+            if (hasFreeLook)
+            {
+                // 插值摄像机 yaw，使用 LerpAngle 保证角度环绕正确
+                freeLookCamera.m_XAxis.Value = Mathf.LerpAngle(startCamYaw, targetCamYaw, t);
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // 确保结尾对齐
+        transform.rotation = targetRot;
+        if (hasFreeLook)
+            freeLookCamera.m_XAxis.Value = targetCamYaw;
+
+        _turnCoroutine = null;
+    }
+
+    // 在场景中查找最近的敌人（优先使用 Tag "Enemy"，找不到则查找带有 EnemyAI 组件的对象）
+    private Transform FindNearestEnemy(float maxDistance)
+    {
+        Transform best = null;
+        float bestSqr = maxDistance * maxDistance;
+
+        // 1. 先按 Tag 查找
+        GameObject[] byTag = GameObject.FindGameObjectsWithTag("Enemy");
+        for (int i = 0; i < byTag.Length; i++)
+        {
+            Transform t = byTag[i].transform;
+            float sqr = (t.position - transform.position).sqrMagnitude;
+            if (sqr < bestSqr)
+            {
+                bestSqr = sqr;
+                best = t;
+            }
+        }
+
+        if (best != null) return best;
+
+        // 2. 回退：按 EnemyAI 组件查找
+        EnemyAI[] ais = FindObjectsOfType<EnemyAI>();
+        for (int i = 0; i < ais.Length; i++)
+        {
+            Transform t = ais[i].transform;
+            float sqr = (t.position - transform.position).sqrMagnitude;
+            if (sqr < bestSqr)
+            {
+                bestSqr = sqr;
+                best = t;
+            }
+        }
+
+        return best;
+    }
+
     // --- 移动处理（供状态机调用）---
+    // 修改：以 freeLookCamera 的 Y 轴朝向作为前进基准（若 freeLookCamera 为空则回退到玩家朝向）
     public Vector3 HandleMovement()
     {
         float horizontal = Input.GetAxisRaw("Horizontal");
         float vertical = Input.GetAxisRaw("Vertical");
 
-        Vector3 forward = transform.forward;
+        // 使用摄像机的朝向作为移动基准（仅考虑 Y 轴旋转）
+        Transform referenceTransform = freeLookCamera != null ? freeLookCamera.transform : transform;
+
+        Vector3 forward = referenceTransform.forward;
         forward.y = 0f;
         forward.Normalize();
 
-        Vector3 right = transform.right;
+        Vector3 right = referenceTransform.right;
         right.y = 0f;
         right.Normalize();
 
