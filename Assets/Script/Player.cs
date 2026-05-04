@@ -25,10 +25,6 @@ public class Player : MonoBehaviour
     public float dodgeCooldown = 0.8f;   // 闪避冷却时间
     public float dodgeCost = 20f;        // 闪避消耗耐力
 
-    [Header("朝向敌人平滑设置")]
-    [Tooltip("按下中键时朝向敌人旋转时长（秒）")]
-    public float faceTargetDuration = 0.1f;
-
     // --- 内部状态 ---
     [HideInInspector] public bool isDodging = false;
     private float lastDodgeTime = -1f;
@@ -36,14 +32,8 @@ public class Player : MonoBehaviour
     [HideInInspector] public float dodgeSpeed;
 
     private Vector3 currentMoveDirection;
-    private bool jumpRequested;
     private StaminaController _stamina;
     private HealthController _health;
-
-    // 平滑朝向控制
-    private bool isFacingSmooth = false;      // 正在平滑朝向目标期间为 true（用于忽略鼠标水平输入）
-    private Coroutine faceCoroutine = null;
-
     // --- 状态机 ---
     public PlayerStateMachine stateMachine;
     public PlayerIdleState idleState;
@@ -83,9 +73,6 @@ public class Player : MonoBehaviour
             freeLookCamera = FindObjectOfType<CinemachineFreeLook>();
 #endif
         }
-
-        // 启动时刷新一次相机旋转，使相机面向玩家当前朝向
-        RefreshCameraRotation();
     }
 
     void Update()
@@ -103,32 +90,22 @@ public class Player : MonoBehaviour
         }
         else if (Input.GetKeyDown(KeyCode.R))
         {
+            // 如果当前已经是防御状态，就切回闲置；否则进入防御
             if (stateMachine.CurrentState == guardState)
+            {
                 stateMachine.TransitionTo(idleState);
+            }
             else
+            {
                 stateMachine.TransitionTo(guardState);
+            }
         }
         else if (Input.GetKeyDown(KeyCode.Space) && !isDodging && Time.time >= lastDodgeTime + dodgeCooldown)
         {
             stateMachine.TransitionTo(dodgeState);
         }
-        else if (Input.GetKeyDown(KeyCode.LeftShift) && !isDodging)
-        {
-            // placeholder for dash if you later add it
-        }
-        else if (Input.GetButtonDown("Jump") && IsGrounded())
-        {
-            jumpRequested = true;
-            stateMachine.TransitionTo(idleState); // 如果没有 jumpState，回到 idle（若有 jumpState，可改为 jumpState）
-        }
 
-        // 中键按下：面向敌人并同步摄像机
-        if (Input.GetMouseButtonDown(2))
-        {
-            TryFaceEnemyUnderCursorSmooth();
-        }
-
-        // 2. 旋转逻辑（鼠标）
+        // 2. 旋转逻辑
         HandleRotation();
 
         // 3. 状态机逻辑更新
@@ -139,7 +116,7 @@ public class Player : MonoBehaviour
         {
             _health.TakeDamage(30f);
         }
-    }
+    } 
 
     void FixedUpdate()
     {
@@ -154,151 +131,7 @@ public class Player : MonoBehaviour
         if (Mathf.Abs(mouseX) > 0.001f)
         {
             transform.Rotate(0f, mouseX, 0f);
-            SyncCameraYawToPlayer();
         }
-    }
-
-    // --- 在 Start 时或需要时刷新相机，使其朝向玩家朝向 ---
-    private void RefreshCameraRotation()
-    {
-        SyncCameraYawToPlayer();
-        // 强制刷新位置/旋转（容错调用，若方法存在）
-        if (freeLookCamera != null)
-        {
-            try
-            {
-                freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation);
-            }
-            catch { }
-        }
-    }
-
-    // 将 Cinemachine FreeLook 的横向轴（m_XAxis）与玩家 Y 角度同步
-    private void SyncCameraYawToPlayer()
-    {
-        if (freeLookCamera == null) return;
-        try
-        {
-            freeLookCamera.m_XAxis.Value = transform.eulerAngles.y;
-        }
-        catch
-        {
-            // 若 Cinemachine 版本 API 不同则忽略失败
-        }
-    }
-
-    // --- 鼠标中键：平滑面向目标（优先光标下的敌人，否则最近敌人） ---
-    private void TryFaceEnemyUnderCursorSmooth()
-    {
-        // 首先做射线检测
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-        Transform enemy = null;
-
-        if (Physics.Raycast(ray, out hit, 200f))
-        {
-            enemy = ResolveEnemyTransform(hit.transform);
-        }
-
-        // 如果射线没有命中敌人，尝试找最近的带 EnemyAI 的对象
-        if (enemy == null)
-        {
-            EnemyAI[] ais = GameObject.FindObjectsOfType<EnemyAI>();
-            float bestDist = float.MaxValue;
-            foreach (var a in ais)
-            {
-                float d = Vector3.SqrMagnitude(a.transform.position - transform.position);
-                if (d < bestDist)
-                {
-                    bestDist = d;
-                    enemy = a.transform;
-                }
-            }
-        }
-
-        if (enemy != null)
-        {
-            StartFaceTargetSmooth(enemy.position, faceTargetDuration);
-        }
-    }
-
-    private Transform ResolveEnemyTransform(Transform t)
-    {
-        if (t == null) return null;
-        if (t.CompareTag("Enemy")) return t;
-        var ai = t.GetComponentInParent<EnemyAI>();
-        if (ai != null) return ai.transform;
-        var bt = t.GetComponentInParent<BehaviorTree>();
-        if (bt != null) return bt.transform;
-        var er = t.GetComponentInParent<EnemyRangedAttack>();
-        if (er != null) return er.transform;
-        return null;
-    }
-
-    private void StartFaceTargetSmooth(Vector3 worldPosition, float duration)
-    {
-        if (faceCoroutine != null)
-        {
-            StopCoroutine(faceCoroutine);
-            faceCoroutine = null;
-            isFacingSmooth = false;
-        }
-        faceCoroutine = StartCoroutine(FaceTargetSmoothCoroutine(worldPosition, duration));
-    }
-
-    private IEnumerator FaceTargetSmoothCoroutine(Vector3 worldPosition, float duration)
-    {
-        Vector3 dir = worldPosition - transform.position;
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.0001f)
-            yield break;
-
-        float startYaw = transform.eulerAngles.y;
-        float targetYaw = Quaternion.LookRotation(dir).eulerAngles.y;
-        // 使用最短角度差
-        float delta = Mathf.DeltaAngle(startYaw, targetYaw);
-
-        if (duration <= 0f)
-        {
-            transform.rotation = Quaternion.Euler(0f, targetYaw, 0f);
-            SyncCameraYawToPlayer();
-            yield break;
-        }
-
-        isFacingSmooth = true;
-        float elapsed = 0f;
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / duration);
-            float yaw = startYaw + delta * t;
-            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-
-            // 同步摄像机横轴
-            if (freeLookCamera != null)
-            {
-                try
-                {
-                    freeLookCamera.m_XAxis.Value = yaw;
-                }
-                catch { }
-            }
-
-            yield return null;
-        }
-
-        // Ensure final exact rotation
-        transform.rotation = Quaternion.Euler(0f, targetYaw, 0f);
-        SyncCameraYawToPlayer();
-
-        // 强制刷新摄像机位置/旋转（celan final)
-        if (freeLookCamera != null)
-        {
-            try { freeLookCamera.ForceCameraPosition(freeLookCamera.transform.position, freeLookCamera.transform.rotation); } catch { }
-        }
-
-        isFacingSmooth = false;
-        faceCoroutine = null;
     }
 
     // --- 移动处理（供状态机调用）---
@@ -332,7 +165,7 @@ public class Player : MonoBehaviour
             return Vector3.zero;
         }
     }
-    // --- 冲刺/闪避逻辑 ---
+    // --- 冲刺逻辑 ---
     public bool TryStartDodge()
     {
         if (isDodging) return false;
